@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>相關係數計算器</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 定義Inter字體，並設定基礎樣式 */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap');
+        
+        body {
+            font-family: 'Inter', 'Noto Sans TC', sans-serif;
+            background-color: #f3f4f6;
+            color: #1f2937;
+        }
+
+        /* 自定義文件輸入框按鈕 */
+        input[type="file"]::file-selector-button {
+            background-color: #ffffff;
+            color: #374151;
+            padding: 0.4rem 1rem;
+            margin-right: 1rem;
+            border-radius: 0.375rem;
+            border: 1px solid #9ca3af;
+            font-size: 0.875rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        input[type="file"]::file-selector-button:hover {
+            background-color: #f3f4f6;
+            border-color: #4b5563;
+        }
+    </style>
+</head>
+<body class="bg-[#f3f4f6] p-6 font-sans flex flex-col items-center min-h-screen">
+    <div id="root" class="w-full flex flex-col items-center max-w-6xl"></div>
+
+    <!-- React CDN -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <!-- ReactDOM CDN -->
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- Babel CDN -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <script type="text/babel">
+        const { useState, useEffect, useCallback } = React;
+
+        const App = () => {
+          // State for A-score data
+          const [aScoresData, setAScoresData] = useState([
+            { id: Date.now() + Math.random(), studentId: '', aspect1: '', aspect2: '', aspect3: '', aspect4: '', calculatedAScore: NaN }
+          ]);
+          // State for B-score data
+          const [bScoresData, setBScoresData] = useState([
+            { id: Date.now() + Math.random(), studentId: '', bScore: '' }
+          ]);
+          // State for C-score data
+          const [cScoresData, setCScoresData] = useState([
+            { id: Date.now() + Math.random(), studentId: '', cScore: '' }
+          ]);
+
+          const [proportions, setProportions] = useState({
+            aspect1: 0.25, aspect2: 0.25, aspect3: 0.25, aspect4: 0.25,
+          });
+
+          const [correlationResults, setCorrelationResults] = useState(null); 
+          const [combinedDisplayData, setCombinedDisplayData] = useState(null);
+          const [message, setMessage] = useState('');
+          const [reportType, setReportType] = useState(null);
+
+          // Check proportions
+          useEffect(() => {
+            const sum = Object.values(proportions).reduce((acc, val) => acc + parseFloat(val || 0), 0);
+            if (Math.abs(sum - 1) > 0.0001) setMessage('提示：各面向比例總和目前不為 1。');
+            else setMessage('');
+          }, [proportions]);
+
+          // Calculate A score
+          useEffect(() => {
+            setAScoresData(prevData => {
+              return prevData.map(student => {
+                const numAspect1 = parseFloat(student.aspect1);
+                const numAspect2 = parseFloat(student.aspect2);
+                const numAspect3 = parseFloat(student.aspect3);
+                const numAspect4 = parseFloat(student.aspect4);
+                let weightedSum = 0;
+                let totalProportion = 0;
+                const aspects = [
+                  { value: numAspect1, proportion: proportions.aspect1 },
+                  { value: numAspect2, proportion: proportions.aspect2 },
+                  { value: numAspect3, proportion: proportions.aspect3 },
+                  { value: numAspect4, proportion: proportions.aspect4 }
+                ];
+                aspects.forEach(a => {
+                  if (!isNaN(a.value) && !isNaN(a.proportion) && a.proportion > 0) {
+                    weightedSum += a.value * a.proportion;
+                    totalProportion += a.proportion;
+                  }
+                });
+                const newCalculatedAScore = totalProportion > 0 ? weightedSum / totalProportion : NaN;
+                return { ...student, calculatedAScore: newCalculatedAScore };
+              });
+            });
+          }, [JSON.stringify(aScoresData.map(s => ({ m1: s.aspect1, m2: s.aspect2, m3: s.aspect3, m4: s.aspect4 }))), JSON.stringify(proportions)]);
+
+          // Handlers
+          const handleAScoreDataChange = useCallback((index, field, value) => {
+            setAScoresData(p => { const n=[...p]; n[index][field] = field === 'studentId' ? value.replace(/[\s　]/g, '') : value; return n; });
+          }, []); 
+          const handleBScoreDataChange = useCallback((index, field, value) => {
+            setBScoresData(p => { const n=[...p]; n[index][field] = field === 'studentId' ? value.replace(/[\s　]/g, '') : value; return n; });
+          }, []); 
+          const handleCScoreDataChange = useCallback((index, field, value) => {
+            setCScoresData(p => { const n=[...p]; n[index][field] = field === 'studentId' ? value.replace(/[\s　]/g, '') : value; return n; });
+          }, []);
+          const handleProportionChange = useCallback((aspect, value) => {
+            const num = parseFloat(value);
+            if (isNaN(num)) { setProportions(p => ({ ...p, [aspect]: '' })); return; }
+            if (num < 0) { setProportions(p => ({ ...p, [aspect]: 0 })); return; }
+            setProportions(p => ({ ...p, [aspect]: num }));
+          }, []); 
+
+          // Row Management
+          const addAScoreRow = useCallback(() => setAScoresData(p => [...p, { id: Date.now() + Math.random(), studentId: '', aspect1: '', aspect2: '', aspect3: '', aspect4: '', calculatedAScore: NaN }]), []); 
+          const addBScoreRow = useCallback(() => setBScoresData(p => [...p, { id: Date.now() + Math.random(), studentId: '', bScore: '' }]), []); 
+          const addCScoreRow = useCallback(() => setCScoresData(p => [...p, { id: Date.now() + Math.random(), studentId: '', cScore: '' }]), []);
+          const removeAScoreRow = useCallback((index) => setAScoresData(p => p.filter((_, i) => i !== index)), []); 
+          const removeBScoreRow = useCallback((index) => setBScoresData(p => p.filter((_, i) => i !== index)), []); 
+          const removeCScoreRow = useCallback((index) => setCScoresData(p => p.filter((_, i) => i !== index)), []);
+
+          // Utilities
+          const clearAllData = useCallback(() => {
+            setMessage('');
+            setAScoresData([{ id: Date.now() + Math.random(), studentId: '', aspect1: '', aspect2: '', aspect3: '', aspect4: '', calculatedAScore: NaN }]); 
+            setBScoresData([{ id: Date.now() + Math.random(), studentId: '', bScore: '' }]); 
+            setCScoresData([{ id: Date.now() + Math.random(), studentId: '', cScore: '' }]);
+            setCorrelationResults(null);
+            setCombinedDisplayData(null);
+            setReportType(null);
+          }, []); 
+
+          const mergeStudentData = useCallback((currentData, newPartialDataMap) => {
+            const mergedMap = new Map();
+            currentData.forEach(student => { if (student.studentId) mergedMap.set(student.studentId, { ...student }); });
+            newPartialDataMap.forEach((newStudentPartial, studentId) => {
+              const existingStudent = mergedMap.get(studentId);
+              if (existingStudent) {
+                mergedMap.set(studentId, { ...existingStudent, ...newStudentPartial, 
+                  aspect1: newStudentPartial.hasOwnProperty('aspect1') ? newPartialDataMap.get(studentId).aspect1 : existingStudent.aspect1,
+                  aspect2: newStudentPartial.hasOwnProperty('aspect2') ? newPartialDataMap.get(studentId).aspect2 : existingStudent.aspect2,
+                  aspect3: newStudentPartial.hasOwnProperty('aspect3') ? newPartialDataMap.get(studentId).aspect3 : existingStudent.aspect3,
+                  aspect4: newStudentPartial.hasOwnProperty('aspect4') ? newPartialDataMap.get(studentId).aspect4 : existingStudent.aspect4,
+                  bScore: newStudentPartial.hasOwnProperty('bScore') ? newPartialDataMap.get(studentId).bScore : existingStudent.bScore,
+                  cScore: newStudentPartial.hasOwnProperty('cScore') ? newPartialDataMap.get(studentId).cScore : existingStudent.cScore,
+                });
+              } else {
+                mergedMap.set(studentId, { id: Date.now() + Math.random(), studentId: studentId, aspect1: '', aspect2: '', aspect3: '', aspect4: '', bScore: '', cScore: '', calculatedAScore: NaN, ...newPartialDataMap.get(studentId) });
+              }
+            });
+            return Array.from(mergedMap.values()).sort((a, b) => a.studentId.localeCompare(b.studentId));
+          }, []);
+
+          const handleFileUpload = useCallback((event, type) => {
+            const file = event.target.files[0];
+            if (!file || file.type !== 'text/csv') { setMessage('錯誤：請上傳 CSV 檔案。'); return; }
+            const reader = new FileReader();
+            reader.onload = (e) => {
+              try {
+                const lines = e.target.result.split('\n').filter(line => line.trim() !== ''); 
+                if (lines.length < 2) throw new Error("Format");
+                let newPartial = new Map(); 
+                if (type === 'A') {
+                  const raw = new Map();
+                  lines.slice(1).forEach(line => {
+                    const v = line.split(','); const id = v[0]?.replace(/[\s　]/g, ''); if(!id) return;
+                    if(!raw.has(id)) raw.set(id, {aspect1:[], aspect2:[], aspect3:[], aspect4:[]});
+                    const r = raw.get(id);
+                    [v[1],v[2],v[3],v[4]].forEach((val, i) => { const n = parseFloat(val); if(!isNaN(n)) r[`aspect${i+1}`].push(n); });
+                  });
+                  raw.forEach((v, k) => {
+                    const avg = (arr) => arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : NaN;
+                    newPartial.set(k, { studentId: k, aspect1: avg(v.aspect1), aspect2: avg(v.aspect2), aspect3: avg(v.aspect3), aspect4: avg(v.aspect4) });
+                  });
+                  setAScoresData(p => mergeStudentData(p, newPartial));
+                } else {
+                   const field = type === 'B' ? 'bScore' : 'cScore';
+                   lines.slice(1).forEach(line => {
+                     const v = line.split(','); const id = v[0]?.replace(/[\s　]/g, ''); if(!id) return;
+                     newPartial.set(id, { studentId: id, [field]: v[1]?.trim() || '' });
+                   });
+                   if (type === 'B') setBScoresData(p => mergeStudentData(p, newPartial));
+                   else setCScoresData(p => mergeStudentData(p, newPartial));
+                }
+                setMessage(`成功匯入 ${newPartial.size} 筆數據。`);
+              } catch (err) { setMessage('解析 CSV 發生錯誤，請檢查格式。'); console.error(err); }
+              event.target.value = ''; 
+            };
+            reader.readAsText(file); 
+          }, [mergeStudentData]); 
+
+          const calculatePearsonCorrelation = useCallback((arrX, arrY) => {
+            const n = arrX.length; if (n < 2) return null;
+            let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0, sumY2 = 0;
+            for (let i = 0; i < n; i++) {
+              sumX += arrX[i]; sumY += arrY[i]; sumXY += arrX[i] * arrY[i]; sumX2 += arrX[i] * arrX[i]; sumY2 += arrY[i] * arrY[i];
+            }
+            const num = n * sumXY - sumX * sumY;
+            const den = Math.sqrt((n * sumX2 - sumX * sumX) * (n * sumY2 - sumY * sumY));
+            return den === 0 ? null : num / den;
+          }, []);
+
+          const handleCalculateCorrelation = useCallback((type) => {
+            setMessage(''); setCorrelationResults(null); setCombinedDisplayData(null); setReportType(null);
+            const sumProp = Object.values(proportions).reduce((acc, val) => acc + parseFloat(val || 0), 0);
+            if (Math.abs(sumProp - 1) > 0.0001) { setMessage('錯誤：比例總和需為 1。'); return; }
+
+            if (type === 'AB') {
+                const map = new Map();
+                aScoresData.forEach(s => s.studentId && map.set(s.studentId, {...s, bScore: NaN}));
+                bScoresData.forEach(s => { if(s.studentId && map.has(s.studentId)) map.get(s.studentId).bScore = parseFloat(s.bScore); });
+                const A=[], B=[], m1=[], m2=[], m3=[], m4=[];
+                map.forEach(s => {
+                    if(!isNaN(s.bScore)) {
+                        if(!isNaN(s.calculatedAScore)) { A.push(s.calculatedAScore); B.push(s.bScore); }
+                        if(!isNaN(s.aspect1)) m1.push({a:s.aspect1, b:s.bScore});
+                        if(!isNaN(s.aspect2)) m2.push({a:s.aspect2, b:s.bScore});
+                        if(!isNaN(s.aspect3)) m3.push({a:s.aspect3, b:s.bScore});
+                        if(!isNaN(s.aspect4)) m4.push({a:s.aspect4, b:s.bScore});
+                    }
+                });
+                if(A.length < 2) { setMessage('數據不足以計算 AB 相關係數。'); return; }
+                setCorrelationResults({
+                    type: 'AB',
+                    overall: calculatePearsonCorrelation(A, B),
+                    m1: m1.length>=2?calculatePearsonCorrelation(m1.map(x=>x.a), m1.map(x=>x.b)):null,
+                    m2: m2.length>=2?calculatePearsonCorrelation(m2.map(x=>x.a), m2.map(x=>x.b)):null,
+                    m3: m3.length>=2?calculatePearsonCorrelation(m3.map(x=>x.a), m3.map(x=>x.b)):null,
+                    m4: m4.length>=2?calculatePearsonCorrelation(m4.map(x=>x.a), m4.map(x=>x.b)):null,
+                });
+                setMessage('相關係數 (AB) 計算完成。');
+            } else if (type === 'BC') {
+                const bMap = new Map(); bScoresData.forEach(s => s.studentId && !isNaN(parseFloat(s.bScore)) && bMap.set(s.studentId, parseFloat(s.bScore)));
+                const B=[], C=[];
+                cScoresData.forEach(s => {
+                    if(s.studentId && !isNaN(parseFloat(s.cScore)) && bMap.has(s.studentId)) {
+                        B.push(bMap.get(s.studentId)); C.push(parseFloat(s.cScore));
+                    }
+                });
+                if(B.length < 2) { setMessage('數據不足以計算 BC 相關係數。'); return; }
+                setCorrelationResults({ type: 'BC', bc: calculatePearsonCorrelation(B, C) });
+                setMessage('相關係數 (BC) 計算完成。');
+            } else if (type === 'ABC') {
+                const bMap = new Map(), cMap = new Map();
+                bScoresData.forEach(s => s.studentId && !isNaN(parseFloat(s.bScore)) && bMap.set(s.studentId, parseFloat(s.bScore)));
+                cScoresData.forEach(s => s.studentId && !isNaN(parseFloat(s.cScore)) && cMap.set(s.studentId, parseFloat(s.cScore)));
+                const common = [];
+                aScoresData.forEach(s => {
+                    if(s.studentId && !isNaN(s.calculatedAScore) && bMap.has(s.studentId) && cMap.has(s.studentId)) {
+                        common.push({ ...s, bScore: bMap.get(s.studentId), cScore: cMap.get(s.studentId) });
+                    }
+                });
+                if(common.length < 2) { setMessage('同時擁有 A, B, C 的數據不足。'); return; }
+                const m1 = common.filter(s => !isNaN(s.aspect1));
+                const m2 = common.filter(s => !isNaN(s.aspect2));
+                const m3 = common.filter(s => !isNaN(s.aspect3));
+                const m4 = common.filter(s => !isNaN(s.aspect4));
+                setCorrelationResults({
+                    type: 'ABC',
+                    ab: {
+                        overall: calculatePearsonCorrelation(common.map(s=>s.calculatedAScore), common.map(s=>s.bScore)),
+                        m1: m1.length>=2?calculatePearsonCorrelation(m1.map(s=>s.aspect1), m1.map(s=>s.bScore)):null,
+                        m2: m2.length>=2?calculatePearsonCorrelation(m2.map(s=>s.aspect2), m2.map(s=>s.bScore)):null,
+                        m3: m3.length>=2?calculatePearsonCorrelation(m3.map(s=>s.aspect3), m3.map(s=>s.bScore)):null,
+                        m4: m4.length>=2?calculatePearsonCorrelation(m4.map(s=>s.aspect4), m4.map(s=>s.bScore)):null,
+                    },
+                    bc: calculatePearsonCorrelation(common.map(s=>s.bScore), common.map(s=>s.cScore))
+                });
+                setMessage(`相關係數 (ABC) 計算完成。共 ${common.length} 筆交集資料。`);
+            }
+          }, [proportions, aScoresData, bScoresData, cScoresData, calculatePearsonCorrelation]);
+
+          const handleExportCSV = useCallback((data, type) => {
+            let csvContent = '\uFEFF'; let filename = '';
+            if (type === 'A') {
+              // Modified: Put Calculated Score at the end to ensure M1-M4 are at indices 1-4, matching import logic.
+              csvContent += 'Name,M1,M2,M3,M4,計算結果審查資料分數\n' + data.map(s => `${s.studentId},${isNaN(parseFloat(s.aspect1))?'':parseFloat(s.aspect1).toFixed(2)},${isNaN(parseFloat(s.aspect2))?'':parseFloat(s.aspect2).toFixed(2)},${isNaN(parseFloat(s.aspect3))?'':parseFloat(s.aspect3).toFixed(2)},${isNaN(parseFloat(s.aspect4))?'':parseFloat(s.aspect4).toFixed(2)},${isNaN(s.calculatedAScore)?'':s.calculatedAScore.toFixed(2)}`).join('\n');
+              filename = 'A_Score_Data.csv';
+            } else if (type === 'B') {
+              csvContent += 'Name,Score\n' + data.map(s => `${s.studentId},${isNaN(parseFloat(s.bScore))?'':parseFloat(s.bScore).toFixed(2)}`).join('\n');
+              filename = 'B_Score_Data.csv';
+            } else {
+              csvContent += 'Name,P2\n' + data.map(s => `${s.studentId},${isNaN(parseFloat(s.cScore))?'':parseFloat(s.cScore).toFixed(2)}`).join('\n');
+              filename = 'C_Score_Data.csv';
+            }
+            const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob([csvContent], {type:'text/csv;charset=utf-8;'}));
+            link.download = filename; document.body.appendChild(link); link.click(); document.body.removeChild(link);
+          }, []);
+
+          const handleDownloadSample = useCallback((type) => {
+             let c = '\uFEFF'; let f = '';
+             if(type==='A') { f='A_Sample.csv'; c+='Name,M1,M2,M3,M4\n王大明,85,90,88,92\n陳小美,92,87,89,91\n'; }
+             else if(type==='B') { f='B_Sample.csv'; c+='Name,Score\n王大明,90.5\n陳小美,88.2\n'; }
+             else { f='C_Sample.csv'; c+='Name,P2\n王大明,82.0\n陳小美,91.5\n'; }
+             const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob([c], {type:'text/csv;charset=utf-8;'}));
+             link.download = f; document.body.appendChild(link); link.click(); document.body.removeChild(link);
+          }, []);
+
+          const handleGenerateReport = useCallback((type) => {
+            setMessage(''); setReportType(type);
+            let data = [];
+            const fmt = (v, p) => { const n=parseFloat(v); if(isNaN(n))return''; return type.endsWith('PROP')?(n*p).toFixed(2):n.toFixed(2); };
+            
+            if (type.startsWith('ABC')) {
+                const bMap = new Map(); bScoresData.forEach(s => s.studentId && !isNaN(parseFloat(s.bScore)) && bMap.set(s.studentId, parseFloat(s.bScore)));
+                const cMap = new Map(); cScoresData.forEach(s => s.studentId && !isNaN(parseFloat(s.cScore)) && cMap.set(s.studentId, parseFloat(s.cScore)));
+                aScoresData.forEach(s => {
+                    if(s.studentId && !isNaN(s.calculatedAScore) && bMap.has(s.studentId) && cMap.has(s.studentId)) {
+                        data.push({
+                            studentName: s.studentId, calculatedAScore: s.calculatedAScore.toFixed(2),
+                            aspect1: fmt(s.aspect1, proportions.aspect1), aspect2: fmt(s.aspect2, proportions.aspect2),
+                            aspect3: fmt(s.aspect3, proportions.aspect3), aspect4: fmt(s.aspect4, proportions.aspect4),
+                            bScore: bMap.get(s.studentId).toFixed(2), cScore: cMap.get(s.studentId).toFixed(2)
+                        });
+                    }
+                });
+            } else if (type.startsWith('AB')) {
+                const map = new Map(); aScoresData.forEach(s => s.studentId && map.set(s.studentId, {...s, bScore: NaN}));
+                bScoresData.forEach(s => s.studentId && map.has(s.studentId) && (map.get(s.studentId).bScore = parseFloat(s.bScore)));
+                map.forEach(s => {
+                    if(!isNaN(s.calculatedAScore) && !isNaN(s.bScore)) {
+                        data.push({
+                            studentName: s.studentId, calculatedAScore: s.calculatedAScore.toFixed(2),
+                            aspect1: fmt(s.aspect1, proportions.aspect1), aspect2: fmt(s.aspect2, proportions.aspect2),
+                            aspect3: fmt(s.aspect3, proportions.aspect3), aspect4: fmt(s.aspect4, proportions.aspect4),
+                            bScore: s.bScore.toFixed(2)
+                        });
+                    }
+                });
+            } else if (type === 'BC') {
+                const bMap = new Map(); bScoresData.forEach(s => s.studentId && !isNaN(parseFloat(s.bScore)) && bMap.set(s.studentId, parseFloat(s.bScore)));
+                cScoresData.forEach(s => {
+                    if(s.studentId && !isNaN(parseFloat(s.cScore)) && bMap.has(s.studentId)) {
+                        data.push({ studentName: s.studentId, bScore: bMap.get(s.studentId).toFixed(2), cScore: parseFloat(s.cScore).toFixed(2) });
+                    }
+                });
+            }
+            data.sort((a, b) => a.studentName.localeCompare(b.studentName));
+            setCombinedDisplayData(data);
+            if(data.length) setMessage(`已生成 ${data.length} 筆有效報告。`);
+            else setMessage('無有效資料可生成報告。');
+          }, [aScoresData, bScoresData, cScoresData, proportions]);
+
+          const handleExportReport = useCallback(() => {
+             if(!correlationResults) return;
+             let data = combinedDisplayData;
+             let rType = reportType;
+             
+             if(!data || data.length === 0) {
+                 let type = '';
+                 if(correlationResults.type === 'ABC') type = 'ABC_RAW';
+                 else if(correlationResults.type === 'AB') type = 'AB_RAW';
+                 else if(correlationResults.type === 'BC') type = 'BC';
+                 rType = type;
+                 data = [];
+                 const fmt = (v) => { const n=parseFloat(v); return isNaN(n)?'':n.toFixed(2); };
+                 
+                 if (type.startsWith('ABC')) {
+                    const bMap = new Map(); bScoresData.forEach(s => s.studentId && !isNaN(parseFloat(s.bScore)) && bMap.set(s.studentId, parseFloat(s.bScore)));
+                    const cMap = new Map(); cScoresData.forEach(s => s.studentId && !isNaN(parseFloat(s.cScore)) && cMap.set(s.studentId, parseFloat(s.cScore)));
+                    aScoresData.forEach(s => { if(s.studentId && !isNaN(s.calculatedAScore) && bMap.has(s.studentId) && cMap.has(s.studentId)) data.push({studentName: s.studentId, calculatedAScore: s.calculatedAScore.toFixed(2), aspect1: fmt(s.aspect1), aspect2: fmt(s.aspect2), aspect3: fmt(s.aspect3), aspect4: fmt(s.aspect4), bScore: bMap.get(s.studentId).toFixed(2), cScore: cMap.get(s.studentId).toFixed(2)}); });
+                 } else if (type.startsWith('AB')) {
+                    const map = new Map(); aScoresData.forEach(s => s.studentId && map.set(s.studentId, {...s, bScore: NaN}));
+                    bScoresData.forEach(s => s.studentId && map.has(s.studentId) && (map.get(s.studentId).bScore = parseFloat(s.bScore)));
+                    map.forEach(s => { if(!isNaN(s.calculatedAScore) && !isNaN(s.bScore)) data.push({studentName: s.studentId, calculatedAScore: s.calculatedAScore.toFixed(2), aspect1: fmt(s.aspect1), aspect2: fmt(s.aspect2), aspect3: fmt(s.aspect3), aspect4: fmt(s.aspect4), bScore: s.bScore.toFixed(2)}); });
+                 } else if (type === 'BC') {
+                    const bMap = new Map(); bScoresData.forEach(s => s.studentId && !isNaN(parseFloat(s.bScore)) && bMap.set(s.studentId, parseFloat(s.bScore)));
+                    cScoresData.forEach(s => { if(s.studentId && !isNaN(parseFloat(s.cScore)) && bMap.has(s.studentId)) data.push({studentName: s.studentId, bScore: bMap.get(s.studentId).toFixed(2), cScore: parseFloat(s.cScore).toFixed(2)}); });
+                 }
+                 data.sort((a,b)=>a.studentName.localeCompare(b.studentName));
+             }
+
+             if (!data || data.length === 0) { setMessage('無資料可匯出'); return; }
+
+             let csv = '\uFEFF'; let fname = 'Report.csv';
+             if (rType.startsWith('ABC')) {
+                 csv += 'ABC 相關係數結果\n';
+                 if(correlationResults.type === 'ABC') {
+                     const ab = correlationResults.ab;
+                     csv += `AB_書審總分,${ab.overall?.toFixed(4)}\nAB_面向一,${ab.m1?.toFixed(4)}\nAB_面向二,${ab.m2?.toFixed(4)}\nAB_面向三,${ab.m3?.toFixed(4)}\nAB_面向四,${ab.m4?.toFixed(4)}\n`;
+                     csv += `BC_相關係數,${correlationResults.bc?.toFixed(4)}\n\n`;
+                 }
+                 csv += `學生姓名,書審總分,面向一${rType.includes('PROP')?'(比例)':''},面向二,面向三,面向四,在校成績,筆／面試成績\n`;
+                 data.forEach(d => csv += `${d.studentName},${d.calculatedAScore},${d.aspect1},${d.aspect2},${d.aspect3},${d.aspect4},${d.bScore},${d.cScore}\n`);
+                 fname = 'ABC_Report.csv';
+             } else if (rType.startsWith('AB')) {
+                 csv += '相關係數結果\n';
+                 if(correlationResults.type === 'AB') {
+                     const c = correlationResults;
+                     csv += `書審總分,${c.overall?.toFixed(4)}\n面向一,${c.m1?.toFixed(4)}\n面向二,${c.m2?.toFixed(4)}\n面向三,${c.m3?.toFixed(4)}\n面向四,${c.m4?.toFixed(4)}\n\n`;
+                 }
+                 csv += `學生姓名,書審總分,面向一${rType.includes('PROP')?'(比例)':''},面向二,面向三,面向四,在校成績\n`;
+                 data.forEach(d => csv += `${d.studentName},${d.calculatedAScore},${d.aspect1},${d.aspect2},${d.aspect3},${d.aspect4},${d.bScore}\n`);
+                 fname = 'AB_Report.csv';
+             } else if (rType === 'BC') {
+                 csv += `BC 相關係數,${correlationResults.bc?.toFixed(4)}\n\n`;
+                 csv += `學生姓名,在校成績,筆／面試成績\n`;
+                 data.forEach(d => csv += `${d.studentName},${d.bScore},${d.cScore}\n`);
+                 fname = 'BC_Report.csv';
+             }
+             const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob([csv], {type:'text/csv;charset=utf-8;'}));
+             link.download = fname; document.body.appendChild(link); link.click(); document.body.removeChild(link);
+             setMessage(`已匯出 ${fname}`);
+          }, [correlationResults, combinedDisplayData, reportType, aScoresData, bScoresData, cScoresData]);
+
+          return (
+            <div className="w-full flex flex-col space-y-8">
+              <header className="text-center pt-4">
+                <h1 className="text-3xl font-bold text-gray-800 tracking-wider mb-2">相關係數計算器</h1>
+                <p className="text-sm text-gray-500">Correlation Calculator</p>
+              </header>
+
+              <div className="bg-white rounded border border-gray-300 shadow-sm p-6">
+                <div className="flex flex-col md:flex-row justify-between items-end md:items-center mb-6 border-b border-gray-200 pb-4">
+                    <h2 className="text-lg font-bold text-gray-800">設定書審面向權重比例</h2>
+                    <span className="text-sm text-gray-500 mt-2 md:mt-0">總和需為 1.0</span>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-6">
+                  {Object.keys(proportions).map((aspect, index) => (
+                    <div key={aspect} className="flex flex-col space-y-2">
+                      <label htmlFor={aspect} className="text-xs uppercase font-bold text-gray-500 tracking-wider">面向 {index + 1}</label>
+                      <input type="number" id={aspect} step="0.01" min="0" value={proportions[aspect]} onChange={(e) => handleProportionChange(aspect, e.target.value)} className="w-full p-2 text-lg text-gray-800 border-b border-gray-300 focus:border-gray-600 focus:outline-none transition-colors bg-transparent" />
+                    </div>
+                  ))}
+                </div>
+                <div className="flex flex-wrap gap-3 justify-end">
+                    <button onClick={() => handleDownloadSample('A')} className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 border border-gray-300 hover:bg-gray-200 rounded transition-colors">下載書審成績匯入範本</button>
+                    <button onClick={() => handleDownloadSample('B')} className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 border border-gray-300 hover:bg-gray-200 rounded transition-colors">下載在校成績匯入範本</button>
+                    <button onClick={() => handleDownloadSample('C')} className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 border border-gray-300 hover:bg-gray-200 rounded transition-colors">下載筆／面試成績匯入範本</button>
+                </div>
+                <div className="mt-4 text-right text-sm text-gray-500 font-mono">目前總和: {Object.values(proportions).reduce((acc, val) => acc + parseFloat(val || 0), 0).toFixed(2)}</div>
+              </div>
+
+              {[{key:'A', title:'書審資料 (A)', data: aScoresData, set: setAScoresData, fields: ['aspect1','aspect2','aspect3','aspect4'], hint: '(Name, M1~M4)'}, 
+                {key:'B', title:'在校成績 (B)', data: bScoresData, set: setBScoresData, fields: ['bScore'], hint: '(Name, Score)'}, 
+                {key:'C', title:'筆/面試成績 (C)', data: cScoresData, set: setCScoresData, fields: ['cScore'], hint: '(Name, P2)'}].map(section => (
+                <div key={section.key} className="bg-white rounded border border-gray-300 shadow-sm p-6 transition-all hover:shadow-md">
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
+                        <div className="flex items-baseline gap-2"><h2 className="text-lg font-bold text-gray-800">{section.title}</h2><span className="text-xs text-gray-500 font-medium">{section.hint}</span></div>
+                        <div className="flex items-center mt-4 md:mt-0">
+                            <input type="file" accept=".csv" onChange={(e) => handleFileUpload(e, section.key)} className="text-sm text-gray-600" />
+                            <button onClick={() => handleExportCSV(section.data, section.key)} className="ml-2 px-3 py-1 text-sm font-medium text-gray-600 border border-gray-400 rounded hover:bg-gray-50 transition-colors">匯出 CSV</button>
+                        </div>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm text-left text-gray-700">
+                            <thead className="text-xs text-gray-500 uppercase bg-gray-100 border-b border-gray-200">
+                                <tr>
+                                    {section.key === 'A' && <th className="px-4 py-3 font-bold">計算總分</th>}
+                                    <th className="px-4 py-3 font-bold">姓名</th>
+                                    {section.fields.map(f => <th key={f} className="px-4 py-3 font-bold">{f.includes('aspect') ? `面向 ${f.slice(-1)}` : '分數'}</th>)}
+                                    <th className="px-4 py-3 font-bold text-right">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {section.data.map((item, idx) => (
+                                    <tr key={item.id} className="hover:bg-gray-50 transition-colors">
+                                        {section.key === 'A' && <td className="px-4 py-2 font-mono font-semibold text-gray-800">{isNaN(item.calculatedAScore) ? '-' : item.calculatedAScore.toFixed(2)}</td>}
+                                        <td className="px-4 py-2"><input type="text" value={item.studentId} onChange={e => { const d=[...section.data]; d[idx].studentId=e.target.value.replace(/[\s　]/g,''); section.set(d); }} className="bg-transparent border-b border-transparent focus:border-gray-400 focus:outline-none w-24 py-1 text-gray-800" placeholder="姓名" /></td>
+                                        {section.fields.map(f => (
+                                            <td key={f} className="px-4 py-2"><input type="number" step="0.01" value={item[f]} onChange={e => { const d=[...section.data]; d[idx][f]=e.target.value; section.set(d); }} className="bg-transparent border-b border-transparent focus:border-gray-400 focus:outline-none w-20 py-1 font-mono text-gray-800" placeholder="-" /></td>
+                                        ))}
+                                        <td className="px-4 py-2 text-right"><button onClick={() => section.set(p => p.filter((_, i) => i !== idx))} className="text-gray-400 hover:text-red-500 font-bold px-2 border border-transparent hover:border-red-200 rounded transition-colors">×</button></td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                    <button onClick={() => section.set(p => [...p, { id: Date.now()+Math.random(), studentId: '', ...(section.key==='A'?{aspect1:'',aspect2:'',aspect3:'',aspect4:'',calculatedAScore:NaN}:{ [section.fields[0]]: '' }) }])} className="mt-4 w-full py-2 border border-dashed border-gray-400 text-gray-500 hover:text-gray-800 hover:border-gray-600 rounded text-sm font-medium transition-all">+ 新增資料列</button>
+                </div>
+              ))}
+
+              <div className="flex justify-center pt-4"><button onClick={clearAllData} className="px-8 py-2 text-sm font-medium text-red-500 border border-red-300 rounded hover:bg-red-50 transition-colors">清除所有資料</button></div>
+
+              <div className="bg-white rounded border border-gray-300 shadow-sm p-8 space-y-8">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-center">
+                    <div className="text-center md:text-left font-bold text-gray-800 border-l-4 border-gray-600 pl-3">書審成績 x 在校成績<br/>(AB)</div>
+                    <button onClick={() => handleCalculateCorrelation('AB')} className="h-12 w-full bg-gray-800 text-white text-sm font-bold tracking-wide rounded border-2 border-gray-900 hover:bg-gray-900 transition-all shadow-sm">計算相關係數</button>
+                    <button onClick={() => handleGenerateReport('AB_RAW')} className="h-12 w-full bg-white border-2 border-gray-400 text-gray-700 text-sm font-bold tracking-wide rounded hover:bg-gray-50 hover:border-gray-600 transition-all">報告：原始分數</button>
+                    <button onClick={() => handleGenerateReport('AB_PROP')} className="h-12 w-full bg-gray-100 border-2 border-gray-400 text-gray-700 text-sm font-bold tracking-wide rounded hover:bg-gray-200 hover:border-gray-600 transition-all">報告：比例分數</button>
+                </div>
+                <div className="h-px bg-gray-200 w-full"></div>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-center">
+                    <div className="text-center md:text-left font-bold text-gray-800 border-l-4 border-gray-500 pl-3">在校成績 x 筆／面試成績<br/>(BC)</div>
+                    <button onClick={() => handleCalculateCorrelation('BC')} className="h-12 w-full bg-gray-800 text-white text-sm font-bold tracking-wide rounded border-2 border-gray-900 hover:bg-gray-900 transition-all shadow-sm">計算相關係數</button>
+                    <div className="md:col-span-2"><button onClick={() => handleGenerateReport('BC')} className="h-12 w-full bg-white border-2 border-gray-400 text-gray-700 text-sm font-bold tracking-wide rounded hover:bg-gray-50 hover:border-gray-600 transition-all">報告：原始分數</button></div>
+                </div>
+                <div className="h-px bg-gray-200 w-full"></div>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-center">
+                    <div className="text-center md:text-left font-bold text-gray-800 border-l-4 border-gray-900 pl-3">書審 x 在校 x 筆／面試<br/>(ABC)</div>
+                    <button onClick={() => handleCalculateCorrelation('ABC')} className="h-12 w-full bg-gray-800 text-white text-sm font-bold tracking-wide rounded border-2 border-gray-900 hover:bg-gray-900 transition-all shadow-sm">計算相關係數</button>
+                    <button onClick={() => handleGenerateReport('ABC_RAW')} className="h-12 w-full bg-white border-2 border-gray-400 text-gray-700 text-sm font-bold tracking-wide rounded hover:bg-gray-50 hover:border-gray-600 transition-all">報告：原始分數</button>
+                    <button onClick={() => handleGenerateReport('ABC_PROP')} className="h-12 w-full bg-gray-100 border-2 border-gray-400 text-gray-700 text-sm font-bold tracking-wide rounded hover:bg-gray-200 hover:border-gray-600 transition-all">報告：比例分數</button>
+                </div>
+              </div>
+
+              {message && (<div className={`p-4 text-center text-sm font-medium rounded border ${message.includes('錯誤') ? 'bg-red-50 border-red-200 text-red-700' : 'bg-gray-100 border-gray-300 text-gray-700'}`}>{message}</div>)}
+
+              {correlationResults && (
+                <div className="bg-white rounded border border-gray-300 shadow-sm p-8 animate-fade-in">
+                    <h3 className="text-xl font-bold text-gray-800 mb-6 pb-2 border-b border-gray-200">計算結果</h3>
+                    {correlationResults.type === 'AB' && (
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm text-gray-800">
+                                <thead className="bg-gray-100 text-gray-600 font-semibold border-b border-gray-200"><tr><th className="p-3">書審總分</th><th className="p-3">面向一</th><th className="p-3">面向二</th><th className="p-3">面向三</th><th className="p-3">面向四</th></tr></thead>
+                                <tbody className="text-center"><tr className="border-b border-gray-100"><td className="p-4 font-bold text-lg text-gray-900">{correlationResults.overall?.toFixed(4)}</td><td className="p-4 text-gray-700">{correlationResults.m1?.toFixed(4)}</td><td className="p-4 text-gray-700">{correlationResults.m2?.toFixed(4)}</td><td className="p-4 text-gray-700">{correlationResults.m3?.toFixed(4)}</td><td className="p-4 text-gray-700">{correlationResults.m4?.toFixed(4)}</td></tr></tbody>
+                            </table>
+                        </div>
+                    )}
+                    {correlationResults.type === 'BC' && (
+                        <div className="flex justify-center items-center py-8"><div className="text-center"><p className="text-gray-500 text-xs font-bold uppercase tracking-widest mb-2">Correlation Coefficient</p><p className="text-4xl font-medium text-gray-900">{correlationResults.bc?.toFixed(4)}</p></div></div>
+                    )}
+                    {correlationResults.type === 'ABC' && (
+                        <div className="grid md:grid-cols-2 gap-8">
+                            <div>
+                                <h4 className="text-sm font-bold text-gray-600 mb-4 uppercase tracking-wider">AB (書審成績 x 在校成績)</h4>
+                                <table className="w-full text-sm"><tbody className="divide-y divide-gray-100"><tr><td className="py-2 text-gray-500 font-medium">書審總分</td><td className="py-2 text-right font-bold text-gray-900">{correlationResults.ab.overall?.toFixed(4)}</td></tr><tr><td className="py-2 text-gray-500">面向一</td><td className="py-2 text-right text-gray-700">{correlationResults.ab.m1?.toFixed(4)}</td></tr><tr><td className="py-2 text-gray-500">面向二</td><td className="py-2 text-right text-gray-700">{correlationResults.ab.m2?.toFixed(4)}</td></tr><tr><td className="py-2 text-gray-500">面向三</td><td className="py-2 text-right text-gray-700">{correlationResults.ab.m3?.toFixed(4)}</td></tr><tr><td className="py-2 text-gray-500">面向四</td><td className="py-2 text-right text-gray-700">{correlationResults.ab.m4?.toFixed(4)}</td></tr></tbody></table>
+                            </div>
+                            <div className="flex flex-col justify-center items-center bg-gray-50 rounded border border-gray-200 p-6">
+                                <h4 className="text-sm font-bold text-gray-600 mb-4 uppercase tracking-wider">BC (在校成績 x 筆／面試成績)</h4>
+                                <p className="text-4xl font-medium text-gray-900">{correlationResults.bc?.toFixed(4)}</p>
+                            </div>
+                        </div>
+                    )}
+                    <div className="mt-8 text-right"><button onClick={handleExportReport} className="text-sm font-bold text-gray-600 hover:text-gray-900 border-b-2 border-gray-300 hover:border-gray-600 transition-all pb-0.5">匯出此計算結果 CSV</button></div>
+                </div>
+              )}
+
+              {combinedDisplayData && (
+                <div className="bg-white rounded border border-gray-300 shadow-sm p-8">
+                    <div className="flex justify-between items-center mb-6"><h3 className="text-xl font-bold text-gray-800">有效資料報告</h3><button onClick={handleExportReport} className="px-4 py-2 bg-gray-800 border border-gray-900 text-white text-xs font-bold rounded hover:bg-gray-700 transition-colors">匯出報表 CSV</button></div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm text-left text-gray-700">
+                            <thead className="text-xs text-gray-500 uppercase bg-gray-100 border-b border-gray-200">
+                                <tr>
+                                    {/* Fix: Check ABC first because ABC starts with AB */}
+                                    {reportType.startsWith('ABC') ? (
+                                        <>
+                                            <th className="px-4 py-3 font-bold">姓名</th>
+                                            <th className="px-4 py-3 font-bold">書審總分</th>
+                                            <th className="px-4 py-3 font-bold">面向一</th>
+                                            <th className="px-4 py-3 font-bold">面向二</th>
+                                            <th className="px-4 py-3 font-bold">面向三</th>
+                                            <th className="px-4 py-3 font-bold">面向四</th>
+                                            <th className="px-4 py-3 font-bold">在校成績</th>
+                                            <th className="px-4 py-3 font-bold">筆／面試成績</th>
+                                        </>
+                                    ) : reportType.startsWith('AB') ? (
+                                        <>
+                                            <th className="px-4 py-3 font-bold">姓名</th>
+                                            <th className="px-4 py-3 font-bold">書審總分</th>
+                                            <th className="px-4 py-3 font-bold">面向一</th>
+                                            <th className="px-4 py-3 font-bold">面向二</th>
+                                            <th className="px-4 py-3 font-bold">面向三</th>
+                                            <th className="px-4 py-3 font-bold">面向四</th>
+                                            <th className="px-4 py-3 font-bold">在校成績</th>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <th className="px-4 py-3 font-bold">姓名</th>
+                                            <th className="px-4 py-3 font-bold">在校成績</th>
+                                            <th className="px-4 py-3 font-bold">筆／面試成績</th>
+                                        </>
+                                    )}
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {combinedDisplayData.map((s, i) => (
+                                    <tr key={i} className="hover:bg-gray-50">
+                                        {/* Fix: Check ABC first */}
+                                        {reportType.startsWith('ABC') ? (
+                                            <>
+                                                <td className="px-4 py-2 font-semibold text-gray-900">{s.studentName}</td>
+                                                <td className="px-4 py-2 font-mono font-medium">{s.calculatedAScore}</td>
+                                                <td className="px-4 py-2 font-mono text-xs text-gray-600">{s.aspect1}</td>
+                                                <td className="px-4 py-2 font-mono text-xs text-gray-600">{s.aspect2}</td>
+                                                <td className="px-4 py-2 font-mono text-xs text-gray-600">{s.aspect3}</td>
+                                                <td className="px-4 py-2 font-mono text-xs text-gray-600">{s.aspect4}</td>
+                                                <td className="px-4 py-2 font-mono font-medium text-gray-800">{s.bScore}</td>
+                                                <td className="px-4 py-2 font-mono font-medium text-gray-800">{s.cScore}</td>
+                                            </>
+                                        ) : reportType.startsWith('AB') ? (
+                                            <>
+                                                <td className="px-4 py-2 font-semibold text-gray-900">{s.studentName}</td>
+                                                <td className="px-4 py-2 font-mono font-medium">{s.calculatedAScore}</td>
+                                                <td className="px-4 py-2 font-mono text-xs text-gray-600">{s.aspect1}</td>
+                                                <td className="px-4 py-2 font-mono text-xs text-gray-600">{s.aspect2}</td>
+                                                <td className="px-4 py-2 font-mono text-xs text-gray-600">{s.aspect3}</td>
+                                                <td className="px-4 py-2 font-mono text-xs text-gray-600">{s.aspect4}</td>
+                                                <td className="px-4 py-2 font-mono font-medium text-gray-800">{s.bScore}</td>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <td className="px-4 py-2 font-semibold text-gray-900">{s.studentName}</td>
+                                                <td className="px-4 py-2 font-mono font-medium">{s.bScore}</td>
+                                                <td className="px-4 py-2 font-mono font-medium">{s.cScore}</td>
+                                            </>
+                                        )}
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+              )}
+
+              <footer className="text-center py-8 text-xs text-gray-400 font-medium">
+                <p className="mb-2">最後更新時間：2025年11月24日 上午11:05 (CST)</p>
+                <p>Copyright © 2025 Hzwei 版權所有 All Rights Reserved</p>
+              </footer>
+            </div>
+          );
+        };
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+</html>
